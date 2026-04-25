@@ -15,15 +15,13 @@ A small collection of Python + OpenGL games and experiments built for my Compute
 
 ---
 
-## 🚀 Featured Game: Infinite Neon Track Game
+## 🎮 Controls
 
-A futuristic infinite runner game built with Python and OpenGL.
-
-### ✨ Features
-- Endless gameplay  
-- Neon-style graphics  
-- Increasing difficulty  
-- Collectibles and obstacles  
+| Key | Action |
+|-----|--------|
+| ⬅️ Left Arrow | Move Left |
+| ➡️ Right Arrow | Move Right |
+| ESC | Exit Game |
 
 ### 🛠️ Tech Used
 - Python  
