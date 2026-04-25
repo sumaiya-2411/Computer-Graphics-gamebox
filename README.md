@@ -35,6 +35,10 @@ pip install PyOpenGL PyOpenGL_accelerate
 python "INFINITE NEON TRACK GAME.py"
 ---
 
+
+
 ## 🎥 Gameplay Preview
 
-![Game Demo](demo.gif)
+<p align="center">
+  <img src="demo.gif" width="700"/>
+</p>
