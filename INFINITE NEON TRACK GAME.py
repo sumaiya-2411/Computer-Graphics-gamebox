@@ -1,5 +1,3 @@
-
-
 import random 
 from OpenGL.GL import *
 from OpenGL.GLUT import *
@@ -79,6 +77,209 @@ neon_intensity_pulse = 0.0
 neon_pulse_speed = 0.05
 multiple_glow_layers = True
 
+helicopters = []
+helicopter_spawn_timer = 0
+HELICOPTER_SPAWN_INTERVAL = 600
+class Helicopter:
+    def __init__(self, x, y, z, speed, direction):
+        self.x = x
+        self.y = y
+        self.z = z
+        self.speed = speed
+        self.direction = direction
+        self.rotor_angle = 0.0
+        self.body_color = (random.uniform(0.4, 1.0), random.uniform(0.4, 1.0), random.uniform(0.4, 1.0))
+        self.alive = True
+        self.lifetime = 0 
+        self.side=0  # -1 for left, 1 for right
+    def update(self):
+        if not self.alive:
+            return
+        
+        # Follow the track like cars do
+        current_center_x = get_centerline_x(self.z)
+        next_z = self.z + 20  # Look ahead
+        next_center_x = get_centerline_x(next_z)
+        
+        # Calculate direction based on track curve
+        dx = next_center_x - current_center_x
+        dz = 20
+        
+        if abs(dx) > 0.1:  # If there's a curve
+            # Move toward the track centerline
+            offset_x = current_center_x - self.x
+            self.x += offset_x * 0.05  # Gentle correction toward centerline
+        
+        # Move forward along the track
+        self.z += self.speed
+        
+        # Rotate rotor
+        self.rotor_angle += 20.0
+        if self.rotor_angle >= 360:
+            self.rotor_angle = 0
+            
+        # Remove if too far from player
+        player_dist = abs(self.z - car_z)
+        if player_dist > 1000:
+            self.alive = False
+def spawn_helicopter():
+    """Spawn two helicopters, one on each side of the track"""
+    # Only spawn if no helicopters exist
+    if len(helicopters) == 0:
+        # Get the track centerline at spawn position
+        spawn_z = car_z - 100
+        center_x = get_centerline_x(spawn_z)
+        
+        # Spawn two helicopters - one on each side
+        for side in [-1, 1]:  # -1 for left side, 1 for right side
+            heli_x = center_x + (side * 150)  # 150 units away from center on each side
+            heli_y = random.uniform(200, 300)  # Higher flying height
+            heli_z = spawn_z
+            
+            # Move in same direction as car
+            heli_speed = max(player_speed * 1.2, 4.0)
+            heli_direction = 0.0
+            
+            helicopter = Helicopter(heli_x, heli_y, heli_z, heli_speed, heli_direction)
+            helicopter.lifetime = 0
+            helicopter.side = side  # Track which side this helicopter is on
+            helicopters.append(helicopter)
+def update_helicopters():
+    """Update all helicopters with new behavior"""
+    global helicopter_spawn_timer
+    
+    # Update existing helicopters
+    for heli in helicopters[:]:
+        if not heli.alive:
+            helicopters.remove(heli)
+            continue
+            
+        # Move helicopter forward (same direction as car)
+        heli.z += heli.speed
+        
+        # Keep helicopters on their respective sides of the track
+        current_center_x = get_centerline_x(heli.z)
+        target_x = current_center_x + (heli.side * 150)  # Stay on assigned side
+        heli.x += (target_x - heli.x) * 0.05  # Gentle correction to stay on side
+        
+        # Update rotor
+        heli.rotor_angle += 20.0
+        if heli.rotor_angle >= 360:
+            heli.rotor_angle = 0
+            
+        # Track lifetime (5 seconds at 60 FPS = 300 frames)
+        heli.lifetime += 1
+        if heli.lifetime >= 300:  # 5 seconds
+            heli.alive = False
+    
+    # Spawn timer 
+    helicopter_spawn_timer += 1
+    if helicopter_spawn_timer >= 300:  
+        helicopter_spawn_timer = 0
+        spawn_helicopter()
+
+def draw_helicopter(heli):
+    """Draw a bigger helicopter following the track"""
+    glPushMatrix()
+    glTranslatef(heli.x, heli.y, heli.z)
+    
+    # Rotate helicopter to face forward (along Z-axis direction)
+    glRotatef(90, 0, 1, 0)  # Rotate 90 degrees around Y-axis to face forward
+    
+    # Scale up the entire helicopter
+    glScalef(2, 2, 2)  # Make helicopter 80% bigger
+    
+    # Body (main fuselage)
+    glPushMatrix()
+    glScalef(35, 10, 8)
+    glColor3f(*heli.body_color)
+    glutSolidCube(1.0)
+    glPopMatrix()
+    
+    # Cockpit (front bubble)
+    glPushMatrix()
+    glTranslatef(12, 2, 0)
+    glScalef(12, 6, 6)
+    glColor3f(0.2, 0.4, 0.8)
+    glutSolidSphere(1.0, 8, 8)
+    glPopMatrix()
+    
+    # Main rotor mast
+    glPushMatrix()
+    glTranslatef(0, 6, 0)
+    glScalef(2, 8, 2)
+    glColor3f(0.1, 0.1, 0.1)
+    glutSolidCube(1.0)
+    glPopMatrix()
+    
+    # Main rotor blades
+    glPushMatrix()
+    glTranslatef(0, 12, 0)
+    glRotatef(heli.rotor_angle, 0, 1, 0)
+    
+    # Blade 1
+    glPushMatrix()
+    glScalef(70, 2, 3)
+    glColor3f(0.6, 0.6, 0.6)
+    glutSolidCube(1.0)
+    glPopMatrix()
+    
+    # Blade 2 (perpendicular)
+    glPushMatrix()
+    glRotatef(90, 0, 1, 0)
+    glScalef(70, 2, 3)
+    glColor3f(0.6, 0.6, 0.6)
+    glutSolidCube(1.0)
+    glPopMatrix()
+    
+    glPopMatrix()
+    
+    # Tail boom
+    glPushMatrix()
+    glTranslatef(-20, 0, 0)
+    glScalef(25, 4, 4)
+    glColor3f(*heli.body_color)
+    glutSolidCube(1.0)
+    glPopMatrix()
+    
+    # Tail rotor
+    glPushMatrix()
+    glTranslatef(-35, 3, 0)
+    glRotatef(heli.rotor_angle * 4, 1, 0, 0)
+    glScalef(2, 15, 3)
+    glColor3f(0.6, 0.6, 0.6)
+    glutSolidCube(1.0)
+    glPopMatrix()
+    
+    # Landing skids
+    for side in [-1, 1]:
+        glPushMatrix()
+        glTranslatef(0, -6, side * 6)
+        glScalef(40, 2, 2)
+        glColor3f(0.3, 0.3, 0.3)
+        glutSolidCube(1.0)
+        glPopMatrix()
+    
+    # Small navigation lights
+    glPushMatrix()
+    glTranslatef(-5, 1, 8)
+    glColor3f(1.0, 0.0, 0.0)
+    glutSolidSphere(1, 4, 4)
+    glPopMatrix()
+    
+    glPushMatrix()
+    glTranslatef(-5, 1, -8)
+    glColor3f(0.0, 1.0, 0.0)
+    glutSolidSphere(1, 4, 4)
+    glPopMatrix()
+    
+    glPopMatrix()
+
+def draw_all_helicopters():
+    """Draw all active helicopters"""
+    for heli in helicopters:
+        if heli.alive:
+            draw_helicopter(heli)
 
 def draw_text(x, y, text, size=GLUT_BITMAP_HELVETICA_18):
     """
@@ -123,9 +324,6 @@ def get_centerline_x(z):
     return centerline_history[-1][1]
 
 
-# ===============================
-# Track Generation
-# ===============================
 def generate_track():
     global t_param, track_segments, centerline_history
 
@@ -157,13 +355,7 @@ def generate_track():
 
 
 def draw_enhanced_neon_glow():
-    """
-    Enhanced neon glow 
-    - Speed-responsive pulsation
-    - Color cycling based on wanted level
-    - Multiple glow layers for depth
-    - Intensity boosted by police proximity
-    """
+   
     global neon_intensity_pulse, current_neon_color, neon_color_timer
 
     if len(track_segments) < 2:
@@ -325,24 +517,8 @@ def draw_track():
         glVertex3f(cx, cy, cz)
     glEnd()
 
-
-# ===============================
-# Car
-# ===============================
-
-
-
-
-
-
-
 def draw_car():
-    """
-    Finalized car model:
-    - Car body and roof are same color
-    - Rear lights added on the back side
-    - Wheels centered correctly
-    """
+    
     glPushMatrix()
     glTranslatef(car_x, 20, car_z)
     glRotatef(player_angle, 0, 1, 0)
@@ -418,14 +594,7 @@ def draw_car():
 
 
 def draw_police_car():
-    """
-    Police car with:
-    - Blue body
-    - White roof
-    - Red and blue flashing lightbar covering full roof (all sides)
-    - Light grey wheels
-    - Red back lights
-    """
+
     glPushMatrix()
     glTranslatef(police_x, 20, police_z)
     glRotatef(police_angle, 0, 1, 0)
@@ -571,9 +740,7 @@ def draw_police_car():
     glPopMatrix()
 
 def draw_police_lights(): 
-    """
-    Draws rotating police lights on top of police car.
-    """
+   
     global police_light_toggle, last_light_toggle_time
     
     # Toggle lights every 250ms
@@ -640,13 +807,44 @@ def draw_police_lights():
     glPopMatrix()
     glPopMatrix()
 
+def draw_tree(x, y, z, trunk_height=150, trunk_radius=30, crown_radius=70):
+   
+    glPushMatrix()
+    glTranslatef(x, y, z)
 
+    # Draw trunk (vertical cylinder, base at y=0)
+    glColor3f(0.45, 0.25, 0.07)  # Brown
+    glPushMatrix()
+    glRotatef(-90, 1, 0, 0)  # Make cylinder vertical (along Y)
+    quad = gluNewQuadric()
+    gluCylinder(quad, trunk_radius, trunk_radius * 0.8, trunk_height, 12, 1)
+    glPopMatrix()
 
+    # Draw leafy crown (sphere) at the top of the trunk
+    glColor3f(0.1, 0.6, 0.1)  # Green
+    glPushMatrix()
+    glTranslatef(0, trunk_height, 0)
+    glutSolidSphere(crown_radius, 16, 12)
+    glPopMatrix()
 
+    glPopMatrix()
 
-
-
-
+def draw_trees_along_track():
+   
+    if len(track_segments) < 2:
+        return
+    for i in range(0, len(track_segments), 25):
+        left, right = track_segments[i]
+        for side in [left, right]:
+            dx = side[0] - ((left[0] + right[0]) / 2)
+            dz = side[2] - ((left[2] + right[2]) / 2)
+            norm = math.sqrt(dx * dx + dz * dz)
+            if norm == 0:
+                norm = 1
+            offset = 30  # <<-- Closer to the road edge
+            tree_x = side[0] + (dx / norm) * offset
+            tree_z = side[2] + (dz / norm) * offset
+            draw_tree(tree_x, 0, tree_z)  # y=0 for ground
 
 def keyboardListener(key, x, y):    
     global throttle_on, brake_on, steer_left, steer_right, slow_motion_active, slow_motion_timer
@@ -683,9 +881,7 @@ def keyboardUpListener(key, x, y):
  
 
 def specialKeyListener(key, x, y):
-    """
-    Map arrow keys to steering like a racing game.
-    """
+   
     global steer_left, steer_right
     if key == GLUT_KEY_LEFT:
         steer_left = True
@@ -773,9 +969,7 @@ def setupCamera():
 
 
 def trigger_camera_shake(intensity=5.0, duration=20):
-    """
-    Trigger camera shake effect.
-    """
+    
     global camera_shake_intensity, camera_shake_timer
     camera_shake_intensity = intensity
     camera_shake_timer = duration
@@ -818,8 +1012,6 @@ def reset_game():
     
     for _ in range(180):
         generate_track()
-
-
 def idle():
     global car_z, car_x, player_speed, player_angle, frame_count, spawn_chance
     global player_path_history, police_x, police_z, police_angle
@@ -827,6 +1019,9 @@ def idle():
     global collision_message_timer, police_disabled, police_frozen, police_respawn_timer
     global wanted_level, police_respawn_count, slow_motion_active, slow_motion_timer
     global police_visible
+
+    # Update helicopters
+    update_helicopters()
 
     # === Handle slow-motion timer and INSTANT police chase ===
     if slow_motion_active:
@@ -1028,15 +1223,16 @@ def enhanced_showScreen():
     glLoadIdentity()
     glViewport(0, 0, 1000, 800)
 
+    draw_sky_gradient()
     setupCamera()
-    
-    # === Draw all visual effects in proper order ===
-    draw_enhanced_neon_glow()      # Enhanced neon glow beneath track
-    draw_track()                   # Original track
-    draw_speed_responsive_centerline()  # Enhanced centerline
-    draw_road_markings_glow()      # Glowing side markings
-    
-    draw_car()                     # Original car
+
+    draw_enhanced_neon_glow()           # 1. Neon glow (under everything)
+    draw_track()                        # 2. Track (on top of glow)
+    draw_speed_responsive_centerline()  # 3. Centerline (on top of track)
+    draw_road_markings_glow()           # 4. Road markings (on top of track)
+    draw_trees_along_track()            # 5. Trees (on the sides, after road)
+    draw_all_helicopters()              # 6. Helicopters (in the sky)
+    draw_car()                          # 7. Car (on top of road)
     
     # === Enhanced crash effects ===
     if crashed:
@@ -1074,16 +1270,98 @@ def enhanced_showScreen():
         draw_text(20, 670, "SLOW-MO ACTIVE!", GLUT_BITMAP_HELVETICA_18)
         time_left = slow_motion_timer // 60
         draw_text(20, 640, f"Time left: {time_left}s", GLUT_BITMAP_HELVETICA_18)
-        draw_text(20, 610, "Police Slowed down!", GLUT_BITMAP_HELVETICA_18)
-
+        draw_text(20, 610, "Police frozen!", GLUT_BITMAP_HELVETICA_18)
+   
     glutSwapBuffers()
+
+def draw_sky_gradient():
+    # Create a 30-second cycle that always starts with light orange
+    t = (time.time() % 30) / 30.0  # 0.0 to 1.0 over 30 seconds
+    
+    if t < 0.33:  # First 10 seconds: Very light orange
+        very_light_orange = (1.0, 0.9, 0.7)   # Much lighter orange
+        sky_top = very_light_orange
+        sky_bottom = tuple(very_light_orange[i] * 0.8 for i in range(3))
+        
+    elif t < 0.66:  # Next 10 seconds: Light orange to light blue
+        blend = (t - 0.33) / 0.33
+        very_light_orange = (1.0, 0.9, 0.7)  # Much lighter orange
+        light_blue = (0.6, 0.85, 1.0)        # Light blue
+        
+        sky_top = tuple(very_light_orange[i] * (1 - blend) + light_blue[i] * blend for i in range(3))
+        sky_bottom = tuple(very_light_orange[i] * (1 - blend) * 0.8 + light_blue[i] * blend * 0.7 for i in range(3))
+        
+    else:  # Last 10 seconds: Light blue to dark blue
+        blend = (t - 0.66) / 0.34
+        light_blue = (0.6, 0.85, 1.0)    # Light blue
+        dark_blue = (0.05, 0.05, 0.2)    # Dark blue
+        
+        sky_top = tuple(light_blue[i] * (1 - blend) + dark_blue[i] * blend for i in range(3))
+        sky_bottom = tuple(light_blue[i] * (1 - blend) * 0.7 + dark_blue[i] * blend * 0.3 for i in range(3))
+
+    glDisable(GL_DEPTH_TEST)
+    glMatrixMode(GL_PROJECTION)
+    glPushMatrix()
+    glLoadIdentity()
+    gluOrtho2D(0, 1000, 0, 800)
+    glMatrixMode(GL_MODELVIEW)
+    glPushMatrix()
+    glLoadIdentity()
+
+    glBegin(GL_QUADS)
+    glColor3f(*sky_top)
+    glVertex2f(0, 800)
+    glVertex2f(1000, 800)
+    glColor3f(*sky_bottom)
+    glVertex2f(1000, 0)
+    glVertex2f(0, 0)
+    glEnd()
+
+    glPopMatrix()
+    glMatrixMode(GL_PROJECTION)
+    glPopMatrix()
+    glMatrixMode(GL_MODELVIEW)
+    glEnable(GL_DEPTH_TEST)
+# def draw_sky_gradient():
+    
+#     t = (time.time() % 20) / 20.0
+#     day_color = (0.4, 0.7, 1.0)
+#     night_color = (0.05, 0.05, 0.15)
+#     if t < 0.5:
+#         blend = t * 2
+#     else:
+#         blend = 2 - t * 2
+#     sky_top = tuple(day_color[i] * blend + night_color[i] * (1 - blend) for i in range(3))
+#     sky_bottom = tuple(day_color[i] * (blend * 0.5) + night_color[i] * (1 - blend * 0.5) for i in range(3))
+
+#     glDisable(GL_DEPTH_TEST)
+#     glMatrixMode(GL_PROJECTION)
+#     glPushMatrix()
+#     glLoadIdentity()
+#     gluOrtho2D(0, 1000, 0, 800)
+#     glMatrixMode(GL_MODELVIEW)
+#     glPushMatrix()
+#     glLoadIdentity()
+
+#     glBegin(GL_QUADS)
+#     glColor3f(*sky_top)
+#     glVertex2f(0, 800)
+#     glVertex2f(1000, 800)
+#     glColor3f(*sky_bottom)
+#     glVertex2f(1000, 0)      # <-- Fill down to y=0
+#     glVertex2f(0, 0)
+#     glEnd()
+
+#     glPopMatrix()
+#     glMatrixMode(GL_PROJECTION)
+#     glPopMatrix()
+#     glMatrixMode(GL_MODELVIEW)
+#     glEnable(GL_DEPTH_TEST)
 
 
 
 def draw_road_markings_glow():
-    """
-    Glowing road markings (simulated with pulsing brightness).
-    """
+   
     if len(track_segments) < 4:
         return
     
@@ -1118,9 +1396,6 @@ def draw_road_markings_glow():
         glVertex3f(right2[0] - marking_width, right2[1] + marking_height, right2[2])
         glVertex3f(right1[0] - marking_width, right1[1] + marking_height, right1[2])
     glEnd()
-
-
-
 
 def draw_crash_effects():
     """
@@ -1193,71 +1468,6 @@ def draw_enhanced_police_effects():
             glVertex3f(car_x + 20, 5, car_z)
             glEnd()
 
-
-
-
-def enhanced_showScreen():
-    """
-    Enhanced rendering function with police visibility control.
-    """
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    glLoadIdentity()
-    glViewport(0, 0, 1000, 800)
-
-    setupCamera()
-    
-    # === Draw all visual effects in proper order ===
-    draw_enhanced_neon_glow()      # Enhanced neon glow beneath track
-    draw_track()                   # Original track
-    draw_speed_responsive_centerline()  # Enhanced centerline
-    draw_road_markings_glow()      # Glowing side markings
-  
-    draw_car()                     # Original car
-    
-    # === Enhanced crash effects ===
-    if crashed:
-        draw_crash_effects()
-        draw_text(400, 700, "MISSION FAILED", GLUT_BITMAP_HELVETICA_18)
-        draw_text(380, 650, "PRESS R TO RESTART", GLUT_BITMAP_HELVETICA_18)
-
-    # === Police effects (only draw if visible) ===
-    if police_message_timer > 0:
-        draw_text(380, 650, "POLICE ALERT", GLUT_BITMAP_HELVETICA_18)
-    
-    if police_spawned and police_visible:
-        draw_enhanced_police_effects()  # Enhanced police effects
-        draw_police_car()               # Original police car
-    
-    if collision_message_timer > 0:
-        draw_text(360, 600, "Collision with police, Fake escape", GLUT_BITMAP_HELVETICA_18)
-    
-    # === UI Elements ===
-    speed_text = f"Speed: {player_speed:.1f} u/s"
-    draw_text(20, 760, speed_text, GLUT_BITMAP_HELVETICA_18)
-    wanted_text = f"Wanted Level: {wanted_level}"
-    draw_text(20, 730, wanted_text, GLUT_BITMAP_HELVETICA_18)
-    
-    # === Enhanced speed warnings with color ===
-    if player_speed > 80.0:
-        # Flash warning text
-        if int(frame_count / 10) % 2:  # Flash every 10 frames
-            draw_text(20, 700, "WARNING: HIGH SPEED!", GLUT_BITMAP_HELVETICA_18)
-    elif player_speed < 20.0 and throttle_on:
-        draw_text(20, 700, "Too slow! Speed up!", GLUT_BITMAP_HELVETICA_18)
-    
-    # === Slow-mo UI ===
-    if slow_motion_active:
-        draw_text(20, 670, "SLOW-MO ACTIVE!", GLUT_BITMAP_HELVETICA_18)
-        time_left = slow_motion_timer // 60
-        draw_text(20, 640, f"Time left: {time_left}s", GLUT_BITMAP_HELVETICA_18)
-        draw_text(20, 610, "Police frozen!", GLUT_BITMAP_HELVETICA_18)
-   
-    glutSwapBuffers()
-
-
-# ===============================
-# Main
-# ===============================
 def main():
     glutInit()
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH)
@@ -1283,8 +1493,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()     
-
+    main()
 
 
 
