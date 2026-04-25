@@ -33,3 +33,8 @@ A small collection of Python + OpenGL games and experiments built for my Compute
 ```bash
 pip install PyOpenGL PyOpenGL_accelerate
 python "INFINITE NEON TRACK GAME.py"
+---
+
+## 🎥 Gameplay Preview
+
+![Game Demo](demo.gif)
